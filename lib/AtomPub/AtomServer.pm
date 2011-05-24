@@ -4,7 +4,7 @@
 #
 # $Id$
 
-package MT::AtomServer;
+package AtomPub::AtomServer;
 use strict;
 
 use MT::I18N qw( encode_text );
@@ -13,7 +13,7 @@ use XML::Atom::Util qw( first textValue );
 use base qw( MT::App );
 use MIME::Base64 ();
 use Digest::SHA1 ();
-use MT::Atom;
+use AtomPub::Atom;
 use MT::Util qw( encode_xml );
 use MT::Author;
 
@@ -241,11 +241,11 @@ sub atom_body {
     my $atom;
     if ($app->{is_soap}) {
         my $xml = $app->xml_body;
-        $atom = MT::Atom::Entry->new(Elem => first($xml, NS_SOAP, 'Body'))
-            or return $app->error(500, MT::Atom::Entry->errstr);
+        $atom = AtomPub::Atom::Entry->new(Elem => first($xml, NS_SOAP, 'Body'))
+            or return $app->error(500, AtomPub::Atom::Entry->errstr);
     } else {
-        $atom = MT::Atom::Entry->new(Stream => \$app->request_content)
-            or return $app->error(500, MT::Atom::Entry->errstr);
+        $atom = AtomPub::Atom::Entry->new(Stream => \$app->request_content)
+            or return $app->error(500, AtomPub::Atom::Entry->errstr);
     }
     $atom;
 }
@@ -294,13 +294,13 @@ sub iso2epoch {
     $dt;
 }
 
-package MT::AtomServer::Weblog;
+package AtomPub::AtomServer::Weblog;
 use strict;
 
 use MT::I18N qw( encode_text );
 use XML::Atom;
 use XML::Atom::Feed;
-use base qw( MT::AtomServer );
+use base qw( AtomPub::AtomServer );
 use MT::Blog;
 use MT::Entry;
 use MT::Util qw( encode_xml format_ts );
@@ -328,9 +328,9 @@ sub new_feed {
 sub new_with_entry {
     my $app = shift;
     my ($entry) = @_;
-    my $atom = MT::Atom::Entry->new_with_entry( $entry, Version => 1.0 );
+    my $atom = AtomPub::Atom::Entry->new_with_entry( $entry, Version => 1.0 );
 
-    my $mo = MT::Atom::Entry::_create_issued($entry->modified_on, $entry->blog);
+    my $mo = AtomPub::Atom::Entry::_create_issued($entry->modified_on, $entry->blog);
     $atom->set(NS_APP(), 'edited', $mo);
 
     $atom;
@@ -547,7 +547,7 @@ sub new_post {
     if ( $atom->get(NS_TYPEPAD, 'standalone') && $asset ) {
         $app->response_code(201);
         $app->response_content_type('application/atom_xml');
-        my $a = MT::Atom::Entry->new_with_asset($asset);
+        my $a = AtomPub::Atom::Entry->new_with_asset($asset);
         return $a->as_xml; 
     } 
 
@@ -995,10 +995,10 @@ sub handle_upload {
     $atom->as_xml;
 }
 
-package MT::AtomServer::Weblog::Legacy;
+package AtomPub::AtomServer::Weblog::Legacy;
 use strict;
 
-use base qw( MT::AtomServer::Weblog );
+use base qw( AtomPub::AtomServer::Weblog );
 
 use MT::I18N qw( encode_text );
 use XML::Atom;  # for LIBXML
@@ -1007,7 +1007,7 @@ use MT::Blog;
 use MT::Permission;
 
 use constant NS_CATEGORY => 'http://sixapart.com/atom/category#';
-use constant NS_DC => MT::AtomServer::Weblog->NS_DC();
+use constant NS_DC => AtomPub::AtomServer::Weblog->NS_DC();
 
 sub script { $_[0]->{cfg}->AtomScript . '/weblog' }
 
@@ -1025,7 +1025,7 @@ sub new_feed {
 sub new_with_entry {
     my $app = shift;
     my ($entry) = @_;
-    MT::Atom::Entry->new_with_entry($entry);
+    AtomPub::Atom::Entry->new_with_entry($entry);
 }
 
 sub apply_basename {}
@@ -1110,10 +1110,10 @@ sub get_categories {
     }
 }
 
-package MT::AtomServer::Comments;
+package AtomPub::AtomServer::Comments;
 use strict;
 
-use base qw( MT::AtomServer::Weblog );
+use base qw( AtomPub::AtomServer::Weblog );
 use MT::I18N qw( encode_text );
 
 sub script { $_[0]->{cfg}->AtomScript . '/comments' }
@@ -1149,11 +1149,11 @@ sub handle_request {
 sub new_with_comment {
     my $app = shift;
     my ($comment) = @_;
-    my $atom = MT::Atom::Entry->new_with_comment( $comment, Version => 1.0 );
+    my $atom = AtomPub::Atom::Entry->new_with_comment( $comment, Version => 1.0 );
 
-    my $mo = MT::Atom::Entry::_create_issued(
+    my $mo = AtomPub::Atom::Entry::_create_issued(
         $comment->modified_on || $comment->created_on, $comment->blog);
-    $atom->set(MT::AtomServer::Weblog::NS_APP(), 'edited', $mo);
+    $atom->set(AtomPub::AtomServer::Weblog::NS_APP(), 'edited', $mo);
 
     $atom;
 }
@@ -1275,7 +1275,7 @@ __END__
 
 =head1 NAME
 
-MT::AtomServer
+AtomPub::AtomServer
 
 =head1 SYNOPSIS
 
@@ -1315,7 +1315,7 @@ Processes the request for WSSE authentication and returns a hash containing:
 
 =head2 $app->handle_request
 
-The implementation of this in I<MT::AtomServer::Weblog> passes the request
+The implementation of this in I<AtomPub::AtomServer::Weblog> passes the request
 to the proper method.
 
 =head2 $app->handle

@@ -4,10 +4,10 @@
 #
 # $Id$
 
-package MT::Atom;
+package AtomPub::Atom;
 use strict;
 
-package MT::Atom::Entry;
+package AtomPub::Atom::Entry;
 use MT::I18N qw( encode_text );
 use base qw( XML::Atom::Entry );
 
@@ -152,7 +152,7 @@ __END__
 
 =head1 NAME
 
-MT::Atom
+AtomPub::Atom
 
 =head1 AUTHOR & COPYRIGHT
 
