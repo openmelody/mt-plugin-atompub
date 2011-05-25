@@ -7,10 +7,11 @@
 package AtomPub::AtomServer;
 use strict;
 
+use base qw( MT::App );
+
 use MT::I18N qw( encode_text );
 use XML::Atom;
 use XML::Atom::Util qw( first textValue );
-use base qw( MT::App );
 use MIME::Base64 ();
 use Digest::SHA1 ();
 use AtomPub::Atom;
