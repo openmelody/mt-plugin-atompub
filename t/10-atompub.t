@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    $ENV{MT_APP} = 'AtomPub::AtomServer';
+    $ENV{MT_APP} = 'AtomPub::Server';
 }
 
 use MT::Test qw( :app :db :data );
@@ -12,14 +12,14 @@ use Test::More tests => 7;
 
 
 out_like(
-    'AtomPub::AtomServer',
+    'AtomPub::Server',
     {},
     qr{ Status:\s200 \b .* \b 1 \z }xms,
     "Just a 1 on the root URL",
 );
 
 out_like(
-    'AtomPub::AtomServer',
+    'AtomPub::Server',
     {
         __test_path_info => q{1.0},
     },
@@ -31,7 +31,7 @@ like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the webl
 {
     local $ENV{HTTP_AUTHORIZATION} = q{Derp herp="derp"};
     out_like(
-        'AtomPub::AtomServer',
+        'AtomPub::Server',
         {
             __test_path_info => q{1.0},
         },
@@ -61,7 +61,7 @@ sub wsse_auth {
     local %ENV = %ENV;
     ($ENV{HTTP_AUTHORIZATION}, $ENV{HTTP_X_WSSE}) = wsse_auth();
     out_like(
-        'AtomPub::AtomServer',
+        'AtomPub::Server',
         {
             __test_path_info => q{1.0},
         },

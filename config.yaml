@@ -6,9 +6,9 @@ version: 1.0
 
 applications:
     atom:
-        handler: AtomPub::AtomServer
+        handler: AtomPub::Server
 config_settings:
     AtomApp:
         type: HASH
         default:
-            1.0: AtomPub::AtomServer::Weblog
+            1.0: AtomPub::Server::Weblog

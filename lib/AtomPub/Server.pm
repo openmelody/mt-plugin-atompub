@@ -4,7 +4,7 @@
 #
 # $Id$
 
-package AtomPub::AtomServer;
+package AtomPub::Server;
 use strict;
 
 use base qw( MT::App );
@@ -295,13 +295,13 @@ sub iso2epoch {
     $dt;
 }
 
-package AtomPub::AtomServer::Weblog;
+package AtomPub::Server::Weblog;
 use strict;
 
 use MT::I18N qw( encode_text );
 use XML::Atom;
 use XML::Atom::Feed;
-use base qw( AtomPub::AtomServer );
+use base qw( AtomPub::Server );
 use MT::Blog;
 use MT::Entry;
 use MT::Util qw( encode_xml format_ts );
@@ -996,10 +996,10 @@ sub handle_upload {
     $atom->as_xml;
 }
 
-package AtomPub::AtomServer::Weblog::Legacy;
+package AtomPub::Server::Weblog::Legacy;
 use strict;
 
-use base qw( AtomPub::AtomServer::Weblog );
+use base qw( AtomPub::Server::Weblog );
 
 use MT::I18N qw( encode_text );
 use XML::Atom;  # for LIBXML
@@ -1008,7 +1008,7 @@ use MT::Blog;
 use MT::Permission;
 
 use constant NS_CATEGORY => 'http://sixapart.com/atom/category#';
-use constant NS_DC => AtomPub::AtomServer::Weblog->NS_DC();
+use constant NS_DC => AtomPub::Server::Weblog->NS_DC();
 
 sub script { $_[0]->{cfg}->AtomScript . '/weblog' }
 
@@ -1111,10 +1111,10 @@ sub get_categories {
     }
 }
 
-package AtomPub::AtomServer::Comments;
+package AtomPub::Server::Comments;
 use strict;
 
-use base qw( AtomPub::AtomServer::Weblog );
+use base qw( AtomPub::Server::Weblog );
 use MT::I18N qw( encode_text );
 
 sub script { $_[0]->{cfg}->AtomScript . '/comments' }
@@ -1154,7 +1154,7 @@ sub new_with_comment {
 
     my $mo = AtomPub::Atom::Entry::_create_issued(
         $comment->modified_on || $comment->created_on, $comment->blog);
-    $atom->set(AtomPub::AtomServer::Weblog::NS_APP(), 'edited', $mo);
+    $atom->set(AtomPub::Server::Weblog::NS_APP(), 'edited', $mo);
 
     $atom;
 }
@@ -1276,7 +1276,7 @@ __END__
 
 =head1 NAME
 
-AtomPub::AtomServer
+AtomPub::Server
 
 =head1 SYNOPSIS
 
@@ -1316,12 +1316,12 @@ Processes the request for WSSE authentication and returns a hash containing:
 
 =head2 $app->handle_request
 
-The implementation of this in I<AtomPub::AtomServer::Weblog> passes the request
+The implementation of this in I<AtomPub::Server::Weblog> passes the request
 to the proper method.
 
 =head2 $app->handle
 
-Wrapper method that determines the proper AtomServer package to pass the
+Wrapper method that determines the proper AtomPub::Server package to pass the
 request to.
 
 =head2 $app->iso2ts($iso_ts, $target_zone)
