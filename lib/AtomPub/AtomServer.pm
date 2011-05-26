@@ -159,7 +159,7 @@ sub get_auth_info {
 sub authenticate {
     my $app = shift;
     my $auth = $app->get_auth_info
-        or return $app->auth_failure(401, "Unauthorized");
+        or return;
     for my $f (qw( Username PasswordDigest Nonce Created )) {
         return $app->auth_failure(400, "X-WSSE requires $f")
             unless $auth->{$f};
