@@ -56,28 +56,52 @@ sub wsse_auth {
     my $digest = encode_base64(sha1($nonce_raw . $created . $password), q{});
     my $nonce = encode_base64($nonce_raw, q{});
 
-    return (q{WSSE profile="UsernameToken"}, qq{UsernameToken Username="$username", PasswordDigest="$digest", Nonce="$nonce", Created="$created"});
+    return (
+        Authorization => q{WSSE profile="UsernameToken"},
+        'X-WSSE' => qq{UsernameToken Username="$username", PasswordDigest="$digest", Nonce="$nonce", Created="$created"},
+    );
+}
+
+sub run_app {
+    my ($url, $method, $headers, $body) = @_;
+    if ($url !~ m{ \A \w+:// ([^/]+) (/.* mt-atom\.cgi ) (.*)? \z }xms) {
+        die "Couldn't parse AtomPub url parts out of URL '$url'";
+    }
+    my ($host, $path, $extra) = ($1, $2, $3);
+
+    local %ENV = %ENV;
+    $ENV{HTTP_HOST} = $host;
+    $ENV{REQUEST_URI} = $path;
+
+    $headers ||= {};
+    while (my ($header, $value) = each %$headers) {
+        my $env_header = uc $header;
+        $env_header =~ tr/-/_/;
+        $ENV{"HTTP_$env_header"} = $value;
+    }
+
+    my $app = _run_app('AtomPub::Server', { __test_path_info => $extra });
+    my $out = delete $app->{__test_output};
+
+    my $resp = HTTP::Response->parse($out);
+    return $resp;
 }
 
 {
-    local %ENV = %ENV;
-    $ENV{HTTP_HOST} = 'www.example.com';
-    ($ENV{HTTP_AUTHORIZATION}, $ENV{HTTP_X_WSSE}) = wsse_auth();
-    out_like(
-        'AtomPub::Server',
-        {
-            __test_path_info => q{1.0},
-        },
-        qr{}xms,
-        "Authorized on the weblogs URL",
-    );
-    my $resp = HTTP::Response->parse(get_last_output());
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0', 'GET', { wsse_auth() });
     is($resp->code, 200, "Authorized weblogs request succeeded");
     like($resp->header('Content-Type'), qr{ \A application/atomsvc\+xml }xms, "Authorized weblogs response is a service document");
 
     my $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
     my $root = $doc->documentElement;
     is($root->nodeName, 'service', "Service document starts with a service tag");
+
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    my @collections = $xpath->findnodes('//app:collection', $root);
+    is(scalar @collections, 1, "Service document lists two collections");
+    my ($coll) = @collections;
+    is($coll->getAttribute('href'), q{http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1}, "Collection has blog 1's AtomPub endpoint");
 }
 
 
