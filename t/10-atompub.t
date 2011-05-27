@@ -8,12 +8,13 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 use Digest::SHA1 qw( sha1 );
 use HTTP::Response 5;
 use LWP::Authen::Wsse;
 use MIME::Base64 qw( encode_base64 );
+use XML::LibXML;
 
 
 out_like(
@@ -73,6 +74,10 @@ sub wsse_auth {
     my $resp = HTTP::Response->parse(get_last_output());
     is($resp->code, 200, "Authorized weblogs request succeeded");
     like($resp->header('Content-Type'), qr{ \A application/atomsvc\+xml }xms, "Authorized weblogs response is a service document");
+
+    my $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
+    my $root = $doc->documentElement;
+    is($root->nodeName, 'service', "Service document starts with a service tag");
 }
 
 
