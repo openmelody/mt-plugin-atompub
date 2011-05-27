@@ -69,7 +69,8 @@ sub apply_basename {
 
 sub handle_request {
     my $app = shift;
-    $app->authenticate || return;
+    $app->authenticate or return;
+
     if (my $svc = $app->{param}{svc}) {
         if ($svc eq 'upload') {
             return $app->handle_upload;
@@ -77,22 +78,16 @@ sub handle_request {
             return $app->get_categories;
         }
     }
+
     my $method = $app->request_method;
-    if ($method eq 'POST') {
-        return $app->new_post;
-    } elsif ($method eq 'PUT') {
-        return $app->edit_post;
-    } elsif ($method eq 'DELETE') {
-        return $app->delete_post;
-    } elsif ($method eq 'GET') {
-        if ($app->{param}{entry_id}) {
-            return $app->get_post;
-        } elsif ($app->{param}{blog_id}) {
-            return $app->get_posts;
-        } else {
-            return $app->get_weblogs;
-        }
-    }
+
+    return $app->new_post if $method eq 'POST';
+    return $app->edit_post if $method eq 'PUT';
+    return $app->delete_post if $method eq 'DELETE';
+
+    return $app->get_post if $app->{param}{entry_id};
+    return $app->get_posts if $app->{param}{blog_id};
+    return $app->get_weblogs;
 }
 
 sub authenticate {
