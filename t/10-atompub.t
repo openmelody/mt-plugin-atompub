@@ -8,7 +8,12 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 7;
+use Test::More tests => 8;
+
+use Digest::SHA1 qw( sha1 );
+use HTTP::Response 5;
+use LWP::Authen::Wsse;
+use MIME::Base64 qw( encode_base64 );
 
 
 out_like(
@@ -41,10 +46,6 @@ like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the webl
     like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the weblogs URL with bad auth");
 }
 
-use LWP::Authen::Wsse;
-use MIME::Base64 qw( encode_base64 );
-use Digest::SHA1 qw( sha1 );
-
 sub wsse_auth {
     my $username = "Chuck D";
     my $password = "seecret";
@@ -59,16 +60,19 @@ sub wsse_auth {
 
 {
     local %ENV = %ENV;
+    $ENV{HTTP_HOST} = 'www.example.com';
     ($ENV{HTTP_AUTHORIZATION}, $ENV{HTTP_X_WSSE}) = wsse_auth();
     out_like(
         'AtomPub::Server',
         {
             __test_path_info => q{1.0},
         },
-        qr{ Status:\s200 }xms,
-        "Authorized on the weblogs URL with good auth",
+        qr{}xms,
+        "Authorized on the weblogs URL",
     );
-    like(get_last_output(), qr{ <\?xml }xms, "Authorized response is XML");
+    my $resp = HTTP::Response->parse(get_last_output());
+    is($resp->code, 200, "Authorized weblogs request succeeded");
+    like($resp->header('Content-Type'), qr{ \A application/atomsvc\+xml }xms, "Authorized weblogs response is a service document");
 }
 
 
