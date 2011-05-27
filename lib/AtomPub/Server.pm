@@ -18,9 +18,6 @@ use AtomPub::Atom;
 use MT::Util qw( encode_xml );
 use MT::Author;
 
-use constant NS_SOAP => 'http://schemas.xmlsoap.org/soap/envelope/';
-use constant NS_WSSE => 'http://schemas.xmlsoap.org/ws/2002/07/secext';
-use constant NS_WSU => 'http://schemas.xmlsoap.org/ws/2002/07/utility';
 
 sub init {
     my $app = shift;
@@ -49,28 +46,15 @@ sub handle {
             my($k, $v) = split /=/, $arg, 2;
             $app->{param}{$k} = $v;
         }
-        if (my $action = $app->get_header('SOAPAction')) {
-            $app->{is_soap} = 1;
-            $action =~ s/"//g; # "
-            my($method) = $action =~ m!/([^/]+)$!;
-            $app->request_method($method);
-        }
+
         my $apps = $app->config->AtomApp;
+
         if (my $class = $apps->{$subapp}) {
             eval "require $class;";
             bless $app, $class;
         }
         my $out = $app->handle_request;
         return unless defined $out;
-        if ($app->{is_soap}) {
-            $out =~ s!^(<\?xml.*?\?>)!!;
-            $out = <<SOAP;
-$1
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-    <soap:Body>$out</soap:Body>
-</soap:Envelope>
-SOAP
-        }
         return $out;
     };
     if (my $e = $@) {
@@ -105,53 +89,26 @@ sub show_error {
     my $app = shift;
     my($err) = @_;
     chomp($err = encode_xml($err));
-    if ($app->{is_soap}) {
-        my $code = $app->response_code;
-        if ($code >= 400) {
-            $app->response_code(500);
-            $app->response_message($err);
-        }
-        return <<FAULT;
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <soap:Fault>
-      <faultcode>$code</faultcode>
-      <faultstring>$err</faultstring>
-    </soap:Fault>
-  </soap:Body>
-</soap:Envelope>
-FAULT
-    } else {
-        return <<ERR;
+    return <<ERR;
 <error>$err</error>
 ERR
-    }
 }
 
 sub get_auth_info {
     my $app = shift;
     my %param;
-    if ($app->{is_soap}) {
-        my $xml = $app->xml_body;
-        my $auth = first($xml, NS_WSSE, 'UsernameToken');
-        $param{Username} = textValue($auth, NS_WSSE, 'Username');
-        $param{PasswordDigest} = textValue($auth, NS_WSSE, 'Password');
-        $param{Nonce} = textValue($auth, NS_WSSE, 'Nonce');
-        $param{Created} = textValue($auth, NS_WSU, 'Created');
-    } else {
-        my $req = $app->get_header('X-WSSE')
-            or return $app->auth_failure(401, 'X-WSSE authentication required');
-        $req =~ s/^WSSE //;
-        my ($profile);
-        ($profile, $req) = $req =~ /(\S+),?\s+(.*)/;
-        return $app->error(400, "Unsupported WSSE authentication profile") 
-            if $profile !~ /\bUsernameToken\b/i;
-        for my $i (split /,\s*/, $req) {
-            my($k, $v) = split /=/, $i, 2;
-            $v =~ s/^"//;
-            $v =~ s/"$//;
-            $param{$k} = $v;
-        }
+    my $req = $app->get_header('X-WSSE')
+        or return $app->auth_failure(401, 'X-WSSE authentication required');
+    $req =~ s/^WSSE //;
+    my ($profile);
+    ($profile, $req) = $req =~ /(\S+),?\s+(.*)/;
+    return $app->error(400, "Unsupported WSSE authentication profile") 
+        if $profile !~ /\bUsernameToken\b/i;
+    for my $i (split /,\s*/, $req) {
+        my($k, $v) = split /=/, $i, 2;
+        $v =~ s/^"//;
+        $v =~ s/"$//;
+        $param{$k} = $v;
     }
     \%param;
 }

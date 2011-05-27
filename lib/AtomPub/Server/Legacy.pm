@@ -17,6 +17,9 @@ use MT::Permission;
 
 use constant NS_CATEGORY => 'http://sixapart.com/atom/category#';
 use constant NS_DC => AtomPub::Server::Weblog->NS_DC();
+use constant NS_SOAP => 'http://schemas.xmlsoap.org/soap/envelope/';
+use constant NS_WSSE => 'http://schemas.xmlsoap.org/ws/2002/07/secext';
+use constant NS_WSU => 'http://schemas.xmlsoap.org/ws/2002/07/utility';
 
 sub script { $_[0]->{cfg}->AtomScript . '/weblog' }
 
@@ -33,6 +36,69 @@ sub atom_body {
     my $xml = $app->xml_body;
     return AtomPub::Atom::Entry->new(Elem => first($xml, NS_SOAP, 'Body'))
         or $app->error(500, AtomPub::Atom::Entry->errstr);
+}
+
+sub get_auth_info {
+    my $app = shift;
+    return $app->SUPER::get_auth_info(@_) if !$app->{is_soap};
+
+    my %param;
+    my $xml = $app->xml_body;
+    my $auth = first($xml, NS_WSSE, 'UsernameToken');
+    $param{Username} = textValue($auth, NS_WSSE, 'Username');
+    $param{PasswordDigest} = textValue($auth, NS_WSSE, 'Password');
+    $param{Nonce} = textValue($auth, NS_WSSE, 'Nonce');
+    $param{Created} = textValue($auth, NS_WSU, 'Created');
+    return \%param;
+}
+
+sub handle {
+    my $app = shift;
+
+    if (my $action = $app->get_header('SOAPAction')) {
+        $app->{is_soap} = 1;
+        $action =~ s/"//g; # "
+        my($method) = $action =~ m!/([^/]+)$!;
+        $app->request_method($method);
+    }
+
+    my $out = $app->SUPER::handle(@_)
+        or return;
+
+    if ($app->{is_soap}) {
+        $out =~ s!^(<\?xml.*?\?>)!!;
+        $out = <<SOAP;
+$1
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+<soap:Body>$out</soap:Body>
+</soap:Envelope>
+SOAP
+    }
+
+    return $out;
+}
+
+sub show_error {
+    my $app = shift;
+    return $app->SUPER::show_error(@_) if !$app->{is_soap};
+
+    my($err) = @_;
+    chomp($err = encode_xml($err));
+    my $code = $app->response_code;
+    if ($code >= 400) {
+        $app->response_code(500);
+        $app->response_message($err);
+    }
+    return <<FAULT;
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <soap:Fault>
+      <faultcode>$code</faultcode>
+      <faultstring>$err</faultstring>
+    </soap:Fault>
+  </soap:Body>
+</soap:Envelope>
+FAULT
 }
 
 sub new_feed {
