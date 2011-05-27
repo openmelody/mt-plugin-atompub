@@ -104,5 +104,38 @@ sub run_app {
     is($coll->getAttribute('href'), q{http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1}, "Collection has blog 1's AtomPub endpoint");
 }
 
+{
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'GET', { wsse_auth() });
+    is($resp->code, 200, "Posts list request succeeded");
+    like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Posts list is an Atom document");
+
+    my $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
+    my $root = $doc->documentElement;
+    is($root->nodeName, 'feed', "Posts list is an Atom feed");
+
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
+    my @entries = $xpath->findnodes('./atom:entry', $root);
+    is(scalar @entries, 8, "Posts list has fixture's eight entries");
+
+    my ($entry) = grep { $xpath->findvalue('./atom:id', $_) eq 'tag:narnia.na,1978:/nana//1.1' } @entries;
+    is($xpath->findvalue('./atom:title', $entry), 'A Rainy Day', "Posts list has fixture post #1");
+}
+
+{
+    my $body = <<'EOF';
+<?xml version="1.0" encoding="utf-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+    <title>New AtomPub Post</title>
+    <content type="html">&lt;p&gt;my nice post&lt;/p&gt;</content>
+</entry>
+EOF
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
+        { 'Content-Type' => 'application/atom+xml;type=entry', wsse_auth() }, $body);
+    diag($resp->as_string());
+    is($resp->code, 201, "New post request succeeded (HTTP Created)");
+}
+
 
 1;
