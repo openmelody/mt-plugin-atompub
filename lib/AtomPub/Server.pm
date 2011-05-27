@@ -239,16 +239,8 @@ sub xml_body {
 
 sub atom_body {
     my $app = shift;
-    my $atom;
-    if ($app->{is_soap}) {
-        my $xml = $app->xml_body;
-        $atom = AtomPub::Atom::Entry->new(Elem => first($xml, NS_SOAP, 'Body'))
-            or return $app->error(500, AtomPub::Atom::Entry->errstr);
-    } else {
-        $atom = AtomPub::Atom::Entry->new(Stream => \$app->request_content)
-            or return $app->error(500, AtomPub::Atom::Entry->errstr);
-    }
-    $atom;
+    return AtomPub::Atom::Entry->new(Stream => \$app->request_content)
+        or $app->error(500, AtomPub::Atom::Entry->errstr);
 }
 
 # $target_zone is expected to be a number of hours from GMT

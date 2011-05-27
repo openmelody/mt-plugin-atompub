@@ -26,6 +26,15 @@ sub atom_x_content_type { 'application/x.atom+xml' }
 sub edit_link_rel { 'service.edit' }
 sub get_posts_order_field { 'authored_on' }
 
+sub atom_body {
+    my $app = shift;
+    return $app->SUPER::atom_body(@_) if !$app->{is_soap};
+
+    my $xml = $app->xml_body;
+    return AtomPub::Atom::Entry->new(Elem => first($xml, NS_SOAP, 'Body'))
+        or $app->error(500, AtomPub::Atom::Entry->errstr);
+}
+
 sub new_feed {
     my $app = shift;
     XML::Atom::Feed->new();
