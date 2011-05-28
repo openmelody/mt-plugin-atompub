@@ -219,11 +219,32 @@ sub get_categories {
 
 sub new_post {
     my $app = shift;
-    my $atom = $app->atom_body or return $app->error(500, "No body!");
+
+    my $content_type = $app->param->content_type();
+    if ($content_type !~ m{ \A application/atom\+xml \b }xms) {
+        return $app->new_asset(@_);
+    }
+
+    my $atom = eval { $app->atom_body }
+        or return $app->error(400, "Error decoding Atom entry: $@");
+    my $content_type = $atom->content->type || 'text';
+    if ($content_type =~ m{ \A (?: text | html | xhtml ) \z }xmsi) {
+        return $app->new_entry(@_);
+    }
+
+    return $app->new_asset_inline(@_);
+}
+
+sub new_entry {
+    my $app = shift;
+
+    my $atom = eval { $app->atom_body }
+        or return $app->error(400, "Error decoding Atom entry: $@");
     my $blog = $app->{blog};
     my $user = $app->{user};
     my $perms = $app->{perms};
     my $enc = $app->config('PublishCharset');
+
     ## Check for category in dc:subject. We will save it later if
     ## it's present, but we want to give an error now if necessary.
     my($cat);
@@ -233,40 +254,20 @@ sub new_post {
             or return $app->error(400, "Invalid category '$label'");
     }
 
-    my $content = $atom->content;
-    my $type = $content->type; 
-    my $body = encode_text(MT::I18N::utf8_off($content->body),'utf-8',$enc); 
-    my $asset;
-    if ($type && $type !~ m!^application/.*xml$!) {
-        if ($type !~ m!^text/!) {
-            $asset = $app->_upload_to_asset or return;
-        }
-        elsif ($type && $type eq 'text/plain') {
-            ## Check for LifeBlog Note & SMS records.
-            my $format = $atom->get(NS_DC, 'format');
-            if ($format && ($format eq 'Note' || $format eq 'SMS')) {
-                $asset = $app->_upload_to_asset or return;
-            }
-        }
-    }
-    if ( $atom->get(NS_TYPEPAD, 'standalone') && $asset ) {
-        $app->response_code(201);
-        $app->response_content_type('application/atom_xml');
-        my $a = AtomPub::Atom::Entry->new_with_asset($asset);
-        return $a->as_xml; 
-    } 
+    my $body = encode_text(MT::I18N::utf8_off($atom->content->body),'utf-8',$enc);
 
     my $entry = MT::Entry->new;
     my $orig_entry = $entry->clone;
     $entry->blog_id($blog->id);
     $entry->author_id($user->id);
     $entry->created_by($user->id);
+    # TODO: support post publishing instruction?
     $entry->status($perms->can_publish_post ? MT::Entry::RELEASE() : MT::Entry::HOLD() );
     $entry->allow_comments($blog->allow_comments_default);
     $entry->allow_pings($blog->allow_pings_default);
     $entry->convert_breaks($blog->convert_paras);
     $entry->title(encode_text($atom->title,'utf-8',$enc));
-    $entry->text(encode_text(MT::I18N::utf8_off($atom->content()->body()),'utf-8',$enc));
+    $entry->text($body);
     $entry->excerpt(encode_text($atom->summary,'utf-8',$enc));
     if (my $iso = $atom->issued) {
         my $pub_ts = MT::Util::iso2ts($blog, $iso);
@@ -342,6 +343,14 @@ sub new_post {
                       type => 'application/atom+xml',  # even in Legacy
                       title => $entry->title });
     $atom->as_xml;
+}
+
+sub new_asset {
+    Carp::confess("Can't new_asset yet");
+}
+
+sub new_asset_inline {
+    Carp::confess("Can't new_asset_inline yet");
 }
 
 sub edit_post {

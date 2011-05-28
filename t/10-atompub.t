@@ -8,7 +8,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 9;
+use Test::More tests => 16;
 
 use Digest::SHA1 qw( sha1 );
 use HTTP::Response 5;
@@ -72,15 +72,26 @@ sub run_app {
     local %ENV = %ENV;
     $ENV{HTTP_HOST} = $host;
     $ENV{REQUEST_URI} = $path;
+    if ($body) {
+        $ENV{CONTENT_LENGTH} = length $body;
+        $ENV{CONTENT_TYPE} = $headers->{'Content-Type'}
+            or die "No Content-Type header specified";
+    }
 
     $headers ||= {};
-    while (my ($header, $value) = each %$headers) {
+    HEADER: while (my ($header, $value) = each %$headers) {
+        next HEADER if $header eq 'Content-Type';
         my $env_header = uc $header;
         $env_header =~ tr/-/_/;
         $ENV{"HTTP_$env_header"} = $value;
     }
 
-    my $app = _run_app('AtomPub::Server', { __test_path_info => $extra });
+    #local $SIG{__DIE__} = sub { diag(Carp::longmess(@_)) };
+    my $app = _run_app('AtomPub::Server', {
+        __test_path_info => $extra,
+        __request_method => $method,
+        ($body ? ( __request_content => $body ) : ()),
+    });
     my $out = delete $app->{__test_output};
 
     my $resp = HTTP::Response->parse($out);
@@ -133,7 +144,6 @@ sub run_app {
 EOF
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
         { 'Content-Type' => 'application/atom+xml;type=entry', wsse_auth() }, $body);
-    diag($resp->as_string());
     is($resp->code, 201, "New post request succeeded (HTTP Created)");
 }
 

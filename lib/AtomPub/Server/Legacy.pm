@@ -157,6 +157,23 @@ sub get_weblogs {
     $feed->as_xml;
 }
 
+sub new_asset_inline {
+    my $app = shift;
+
+    # Text content types used to mean plain posts, so still make entries out of them.
+    if ($app->atom_body->content->type =~ m{ \A text/ }xms) {
+        # TODO: but make sure text/plain LifeBlog Notes and SMSes are handled as assets
+        #my $format = $atom->get(NS_DC, 'format');
+        #if ($format && ($format eq 'Note' || $format eq 'SMS')) {
+        return $app->new_entry(@_);
+    }
+
+    # TODO: if the atom:entry did not have a typepad:standalone element, make a new MT::Entry about it too.
+    #if ( $atom->get(NS_TYPEPAD, 'standalone') && $asset ) {
+    #    my $a = AtomPub::Atom::Entry->new_with_asset($asset);
+    return $app->SUPER::new_asset_inline(@_);
+}
+
 sub get_categories {
     my $app = shift;
     my $blog = $app->{blog};
