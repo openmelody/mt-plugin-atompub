@@ -8,8 +8,11 @@ package AtomPub::Atom;
 use strict;
 
 package AtomPub::Atom::Entry;
-use MT::I18N qw( encode_text );
 use base qw( XML::Atom::Entry );
+
+use MT::I18N qw( encode_text );
+use XML::Atom qw( LIBXML );
+
 
 sub _create_issued {
     my ($ts, $blog) = @_;
@@ -32,14 +35,22 @@ sub new_with_entry {
     my $atom = $class->new(%param);
     $atom->title(encode_text($entry->title, undef, 'utf-8'));
     $atom->summary(encode_text($entry->excerpt, undef, 'utf-8'));
-    $atom->content(encode_text($entry->text, undef, 'utf-8'));
-    # Old Atom API gets application/xhtml+xml for compatibility -- but why
-    # do we say it's that when all we're guaranteed is it's an opaque blob
-    # of text? So use 'html' for new RFC compatible output.
-    # XML::Atom::Content intelligently determines content-type for rfc compat.
-    unless ( $rfc_compat ) {
-        $atom->content->type('application/xhtml+xml');
+
+    # Build our own XML::Atom::Content so we always get 'html' back instead
+    # of XML::Atom's guess of HTML or XHTML.
+    my $content = XML::Atom::Content->new();
+    # TODO: apply entry's text filters! otherwise this doesn't work for e.g. Markdown entries
+    my $html = $entry->text;
+    my $text = LIBXML ? XML::LibXML::Text->new($html) : XML::XPath::Node::Text->new($html);
+    $content->elem->appendChild($text);
+    if ($rfc_compat) {
+        $content->type('html');
     }
+    else {
+        $content->type('text/html');
+        $content->mode('escaped');
+    }
+    $atom->content($content);
 
     my $mt_author = MT::Author->load($entry->author_id)
         or return undef;

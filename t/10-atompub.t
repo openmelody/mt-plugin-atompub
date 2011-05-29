@@ -145,6 +145,50 @@ EOF
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
         { 'Content-Type' => 'application/atom+xml;type=entry', wsse_auth() }, $body);
     is($resp->code, 201, "New post request succeeded (HTTP Created)");
+    like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Response creating entry is some Atom document");
+    # The existing fixture data means this post will be #24.
+    is($resp->header('Location'), "http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/entry_id=24",
+        "Response creating entry includes API URL of new entry");
+
+    my $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
+    diag($doc->toString(1));
+    my $root = $doc->documentElement;
+    is($root->nodeName, 'entry', "Response from new entry is an Atom entry");
+
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
+    my $id = $xpath->findvalue('./atom:id', $root);
+    diag($id);
+    ok($id, "Response post has an Atom ID");
+    my $title = $xpath->findvalue('./atom:title', $root);
+    is($title, "New AtomPub Post", "Response post has correct title");
+    my $updated = $xpath->findvalue('./atom:updated', $root);
+    diag($updated);
+    ok($updated, "Response post has an updated timestamp");
+    my @contents = $xpath->findnodes('./atom:content', $root);
+    is(scalar @contents, 1, "Response post included one content node");
+    my ($content) = @contents;
+    is($content->getAttribute('type'), 'html', "Response post has HTML content node");
+    is($content->textContent, "<p>my nice post</p>", "Response post has correct HTML content");
+
+    $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/entry_id=24',
+        'GET', { wsse_auth() });
+    is($resp->code, 200, "Refetching new post succeeded");
+    like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Refetching post returned some Atom document");
+
+    $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
+    $root = $doc->documentElement;
+    is($root->nodeName, 'entry', "Refetching post returned an Atom entry");
+
+    is($xpath->findvalue('./atom:id', $root), $id, "Refetched post has same Atom ID as creation response");
+    is($xpath->findvalue('./atom:updated', $root), $updated, "Refetched post has same updated timestamp as creation response");
+    is($xpath->findvalue('./atom:title', $root), $title, "Refetched post has correct title");
+    my @new_contents = $xpath->findnodes('./atom:content', $root);
+    is(scalar @new_contents, 1, "Refetched post has one content node");
+    my ($new_content) = @new_contents;
+    is($new_content->getAttribute('type'), 'html', "Refetched post has HTML content");
+    is($new_content->textContent, "<p>my nice post</p>", "Refetched post has correct HTML content");
 }
 
 
