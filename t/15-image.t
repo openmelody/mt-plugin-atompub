@@ -10,7 +10,7 @@ BEGIN {
 use MT::Test qw( :app :db :data );
 use Test::More tests => 8;
 
-use AtomPub::Test qw( wsse_auth run_app );
+use AtomPub::Test qw( basic_auth run_app );
 use File::Spec;
 use XML::LibXML;
 
@@ -23,7 +23,7 @@ use XML::LibXML;
     close $fh;
 
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
-        { 'Content-Type' => 'image/gif', wsse_auth() }, $body);
+        { 'Content-Type' => 'image/gif', basic_auth() }, $body);
     is($resp->code, 201, "New post request succeeded (HTTP Created)");
     like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Response creating asset is some Atom document");
 

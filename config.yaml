@@ -13,4 +13,4 @@ config_settings:
         default:
             1.0: AtomPub::Server::Weblog
     AtomAppAuthentication:
-        default: AtomPub::Authen::WSSE
+        default: AtomPub::Authen::Basic

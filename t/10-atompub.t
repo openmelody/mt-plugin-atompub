@@ -10,7 +10,7 @@ BEGIN {
 use MT::Test qw( :app :db :data );
 use Test::More tests => 30;
 
-use AtomPub::Test qw( wsse_auth run_app );
+use AtomPub::Test qw( basic_auth run_app );
 use XML::LibXML;
 
 
@@ -22,7 +22,7 @@ out_like(
 );
 
 {
-    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0', 'GET', { wsse_auth() });
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0', 'GET', { basic_auth() });
     is($resp->code, 200, "Authorized weblogs request succeeded");
     like($resp->header('Content-Type'), qr{ \A application/atomsvc\+xml }xms, "Authorized weblogs response is a service document");
 
@@ -39,7 +39,7 @@ out_like(
 }
 
 {
-    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'GET', { wsse_auth() });
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'GET', { basic_auth() });
     is($resp->code, 200, "Posts list request succeeded");
     like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Posts list is an Atom document");
 
@@ -66,7 +66,7 @@ out_like(
 </entry>
 EOF
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
-        { 'Content-Type' => 'application/atom+xml;type=entry', wsse_auth() }, $body);
+        { 'Content-Type' => 'application/atom+xml;type=entry', basic_auth() }, $body);
     is($resp->code, 201, "New post request succeeded (HTTP Created)");
     like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Response creating entry is some Atom document");
     # The existing fixture data means this post will be #24.
@@ -95,7 +95,7 @@ EOF
     is($content->textContent, "<p>my nice post</p>", "Response post has correct HTML content");
 
     $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/entry_id=24',
-        'GET', { wsse_auth() });
+        'GET', { basic_auth() });
     is($resp->code, 200, "Refetching new post succeeded");
     like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Refetching post returned some Atom document");
 
