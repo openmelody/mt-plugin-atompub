@@ -8,20 +8,25 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 8;
+use Test::More tests => 12;
 
 use AtomPub::Test qw( basic_auth run_app );
 use File::Spec;
 use XML::LibXML;
 
 
-{
+sub load_test_gif {
     my $bodyfile = File::Spec->catfile($ENV{MT_HOME}, 't', 'images', 'test.gif');
     open my $fh, '<', $bodyfile;
     binmode $fh;
     my $body = eval { local $/; <$fh> };
     close $fh;
 
+    return $body;
+}
+
+{
+    my $body = load_test_gif();
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST',
         { 'Content-Type' => 'image/gif', basic_auth() }, $body);
     is($resp->code, 201, "New post request succeeded (HTTP Created)");
@@ -45,6 +50,31 @@ use XML::LibXML;
     is($content->getAttribute('type'), 'image/gif', "Created asset content has the right type");
     is($content->getAttribute('src'), 'http://narnia.na/nana/file', "Created asset content refers to src");
     is(scalar @{[ $content->childNodes() ]}, 0, "Created asset content is an empty node");
+}
+
+# 'Slug' header used for filename with raw uploads
+{
+    my $body = load_test_gif();
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST', {
+        'Content-Type' => 'image/gif',
+        'Slug' => 'super-awesome-mega-gif.gif',
+        basic_auth()
+    }, $body);
+    is($resp->code, 201, "New post request succeeded (HTTP Created)");
+    like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Response creating asset is some Atom document");
+
+    is($resp->header('Location'), 'http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/asset_id=4',
+        "Response creating new asset includes API URL of new asset");
+
+    my $doc = XML::LibXML->load_xml( string => $resp->decoded_content );
+    my $root = $doc->documentElement;
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
+
+    my ($content) = $xpath->findnodes('./atom:content', $root);
+    is($content->getAttribute('src'), 'http://narnia.na/nana/super-awesome-mega-gif.gif',
+        "Created asset's file used Slug header for filename");
 }
 
 
