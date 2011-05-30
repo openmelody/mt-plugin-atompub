@@ -1,4 +1,4 @@
-use lib qw( t/lib lib extlib plugins/AtomPub/lib );
+use lib qw( t/lib lib extlib plugins/AtomPub/lib plugins/AtomPub/t/lib );
 
 use strict;
 use warnings;
@@ -8,12 +8,9 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 16;
+use Test::More tests => 34;
 
-use Digest::SHA1 qw( sha1 );
-use HTTP::Response 5;
-use LWP::Authen::Wsse;
-use MIME::Base64 qw( encode_base64 );
+use AtomPub::Test qw( wsse_auth run_app );
 use XML::LibXML;
 
 
@@ -45,57 +42,6 @@ like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the webl
         "Unauthorized on the weblogs URL with bad auth",
     );
     like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the weblogs URL with bad auth");
-}
-
-sub wsse_auth {
-    my $username = "Chuck D";
-    my $password = "seecret";
-    my $nonce_raw = LWP::Authen::Wsse->make_nonce();
-    my $created = LWP::Authen::Wsse->now_w3cdtf();
-
-    my $digest = encode_base64(sha1($nonce_raw . $created . $password), q{});
-    my $nonce = encode_base64($nonce_raw, q{});
-
-    return (
-        Authorization => q{WSSE profile="UsernameToken"},
-        'X-WSSE' => qq{UsernameToken Username="$username", PasswordDigest="$digest", Nonce="$nonce", Created="$created"},
-    );
-}
-
-sub run_app {
-    my ($url, $method, $headers, $body) = @_;
-    if ($url !~ m{ \A \w+:// ([^/]+) (/.* mt-atom\.cgi ) (.*)? \z }xms) {
-        die "Couldn't parse AtomPub url parts out of URL '$url'";
-    }
-    my ($host, $path, $extra) = ($1, $2, $3);
-
-    local %ENV = %ENV;
-    $ENV{HTTP_HOST} = $host;
-    $ENV{REQUEST_URI} = $path;
-    if ($body) {
-        $ENV{CONTENT_LENGTH} = length $body;
-        $ENV{CONTENT_TYPE} = $headers->{'Content-Type'}
-            or die "No Content-Type header specified";
-    }
-
-    $headers ||= {};
-    HEADER: while (my ($header, $value) = each %$headers) {
-        next HEADER if $header eq 'Content-Type';
-        my $env_header = uc $header;
-        $env_header =~ tr/-/_/;
-        $ENV{"HTTP_$env_header"} = $value;
-    }
-
-    #local $SIG{__DIE__} = sub { diag(Carp::longmess(@_)) };
-    my $app = _run_app('AtomPub::Server', {
-        __test_path_info => $extra,
-        __request_method => $method,
-        ($body ? ( __request_content => $body ) : ()),
-    });
-    my $out = delete $app->{__test_output};
-
-    my $resp = HTTP::Response->parse($out);
-    return $resp;
 }
 
 {
@@ -151,7 +97,6 @@ EOF
         "Response creating entry includes API URL of new entry");
 
     my $doc = XML::LibXML->load_xml(string => $resp->decoded_content);
-    diag($doc->toString(1));
     my $root = $doc->documentElement;
     is($root->nodeName, 'entry', "Response from new entry is an Atom entry");
 
