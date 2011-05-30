@@ -46,6 +46,17 @@ sub new_with_entry {
     $atom;
 }
 
+sub new_with_asset {
+    my $app = shift;
+    my ($asset) = @_;
+    my $atom = AtomPub::Atom::Entry->new_with_asset( $asset, Version => 1.0 );
+
+    my $mo = AtomPub::Atom::Entry::_create_issued($asset->modified_on, $asset->blog);
+    $atom->set(NS_APP(), 'edited', $mo);
+
+    return $atom;
+}
+
 sub apply_basename {
     my $app = shift;
     my ($entry, $atom) = @_;
@@ -346,7 +357,27 @@ sub new_entry {
 }
 
 sub new_asset {
-    Carp::confess("Can't new_asset yet");
+    my $app = shift;
+    my $filename = $app->get_header('Slug') || 'file';
+    my $content_type = $app->param->content_type;
+    $content_type =~ s{ \s*; .* }{}xms;
+    my $asset = $app->upload_asset(
+        filename => $filename,
+        content_type => $content_type,
+        data => $app->request_content,
+    ) or return;  # error
+
+    # derp
+    $app->response_code(201);
+    $app->response_content_type('application/atom+xml');
+    my $edit_url = $app->base . $app->uri . '/blog_id=' . $asset->blog_id . '/asset_id=' . $asset->id;
+    $app->set_header('Location', $edit_url);
+    my $atom = $app->new_with_asset($asset);
+    $atom->add_link({ rel => $app->edit_link_rel,
+                      href => $edit_url,
+                      type => 'application/atom+xml',
+                      title => $asset->label });
+    return $atom->as_xml();
 }
 
 sub new_asset_inline {
@@ -538,8 +569,25 @@ sub contains_html {
 sub _upload_to_asset {
     my $app = shift;
     my $atom = $app->atom_body or return;
-    my $blog = $app->{blog};
-    my $user = $app->{user};
+
+    return $app->error(403, "Access denied") unless $app->{perms}->can_upload;
+    my $content = $atom->content;
+    my $type = $content->type
+        or return $app->error(400, "content \@type is required");
+    my $fname = $atom->title or return $app->error(400, "title is required");
+    my $data = $content->body;
+
+    return $app->upload_asset(
+        filename => $fname,
+        content_type => $type,
+        data => $data,
+    );
+}
+
+sub upload_asset {
+    my $app = shift;
+    my %param = @_;
+    my ($fname, $type, $data) = @param{qw( filename content_type data )};
     my %MIME2EXT = (
         'text/plain'         => '.txt',
         'image/jpeg'         => '.jpg',
@@ -553,11 +601,8 @@ sub _upload_to_asset {
         'audio/ogg-vorbis'   => '.ogg',
     );
 
-    return $app->error(403, "Access denied") unless $app->{perms}->can_upload;
-    my $content = $atom->content;
-    my $type = $content->type
-        or return $app->error(400, "content \@type is required");
-    my $fname = $atom->title or return $app->error(400, "title is required");
+    my $blog = $app->{blog};
+    my $user = $app->{user};
     $fname = basename($fname);
     return $app->error(400, "Invalid or empty filename")
         if $fname =~ m!/|\.\.|\0|\|!;
@@ -616,7 +661,6 @@ sub _upload_to_asset {
 
     $local = $path . $base . $ext;
     my $local_basename = $base . $ext;
-    my $data = $content->body;
 
     # TODO: some authors should probably be allowed to upload HTML documents,
     # so shouldn't we only check this if we're uploading an image?
@@ -687,7 +731,7 @@ sub _upload_to_asset {
             Blog => $blog, blog => $blog);
     }
 
-    $asset;
+    return $asset;
 }
 
 sub handle_upload {
