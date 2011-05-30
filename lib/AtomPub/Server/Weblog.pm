@@ -519,6 +519,22 @@ sub delete_post {
     '';
 }
 
+sub contains_html {
+    # Evaluates the first 1k of content in an image file to see if it contains
+    # HTML or JavaScript content in the body. Image files that contain embedded
+    # HTML or JavaScript should be prohibited in order to prevent a known IE 6
+    # and 7 content-sniffing vulnerability.
+    my $data_ref = shift;
+    my $html_test_string = substr $$data_ref, 0, 1024;
+    return 1 if
+        ( $html_test_string =~ m/^\s*<[!?]/ ) ||
+        ( $html_test_string =~ m/<(HTML|SCRIPT|TITLE|BODY|HEAD|PLAINTEXT|TABLE|IMG|PRE|A)/i ) ||
+        ( $html_test_string =~ m/text\/html/i ) ||
+        ( $html_test_string =~ m/^\s*<(FRAMESET|IFRAME|LINK|BASE|STYLE|DIV|P|FONT|APPLET)/i ) ||
+        ( $html_test_string =~ m/^\s*<(APPLET|META|CENTER|FORM|ISINDEX|H[123456]|B|BR)/i )
+        ;
+}
+
 sub _upload_to_asset {
     my $app = shift;
     my $atom = $app->atom_body or return;
@@ -602,27 +618,10 @@ sub _upload_to_asset {
     my $local_basename = $base . $ext;
     my $data = $content->body;
 
-    ###
-    #
-    # Function to evaluate the first 1k of content in an image file to see if it contains HTML or JavaScript
-    # content in the body.  Image files that contain embedded HTML or JavaScript are
-    # prohibited in order to prevent a known IE 6 and 7 content-sniffing vulnerability.
-    #
-    # This code based on the ImageValidate plugin written by Six Apart.
-    #
-    ###
-
-    ## Make a copy of the body that only contains the first 1k bytes.
-    my $html_test_string = substr($data, 0, 1024);
-
-    ## Using an error message format that already exists in all localizations of Movable Type 4.
+    # TODO: some authors should probably be allowed to upload HTML documents,
+    # so shouldn't we only check this if we're uploading an image?
     return $app->error(500, MT->translate("Saving [_1] failed: [_2]", $local_basename, "Invalid image file format.")) if
-        ( $html_test_string =~ m/^\s*<[!?]/ ) ||
-        ( $html_test_string =~ m/<(HTML|SCRIPT|TITLE|BODY|HEAD|PLAINTEXT|TABLE|IMG|PRE|A)/i ) ||
-        ( $html_test_string =~ m/text\/html/i ) ||
-        ( $html_test_string =~ m/^\s*<(FRAMESET|IFRAME|LINK|BASE|STYLE|DIV|P|FONT|APPLET)/i ) ||
-        ( $html_test_string =~ m/^\s*<(APPLET|META|CENTER|FORM|ISINDEX|H[123456]|B|BR)/i )
-        ;
+        contains_html(\$data);
 
     defined(my $bytes = $fmgr->put_data($data, $local, 'upload'))
         or return $app->error(500, "Error writing uploaded file");
