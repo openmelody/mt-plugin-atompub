@@ -7,6 +7,12 @@
 package AtomPub::Atom;
 use strict;
 
+package AtomPub::Atom::Content;
+use base qw( XML::Atom::Content );
+
+__PACKAGE__->mk_attr_accessors(qw( src ));
+
+
 package AtomPub::Atom::Entry;
 use base qw( XML::Atom::Entry );
 
@@ -100,16 +106,22 @@ sub new_with_entry {
 sub new_with_asset {
     my $class = shift;
     my($asset, %param) = @_;
+    my $blog = MT::Blog->load($asset->blog_id)
+        or return undef;
+
     my $atom = $class->new(%param);
     $atom->title($asset->label);
     $atom->summary($asset->description);
-    my $blog = MT::Blog->load($asset->blog_id)
-        or return undef;
     $atom->issued(_create_issued($asset->created_on, $blog));
-    $atom->add_link({ rel => 'alternate', type => $asset->mime_type,
-                      href => $asset->url, title => $asset->label });
+
+    my $content = AtomPub::Atom::Content->new;
+    $content->type($asset->mime_type);
+    $content->src($asset->url());
+    $atom->set($atom->ns, 'content', $content);
+
     my ($host) = $blog->site_url =~ m!^https?://([^/:]+)(:\d+)?/!;
     $atom->id('tag:' . $host . ':asset-' . $asset->id);
+
     return $atom;
 }
 
