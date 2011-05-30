@@ -2,17 +2,23 @@ package AtomPub::Test;
 use strict;
 use warnings;
 
-use MT::Test qw( _run_app );
-
 use Digest::SHA1 qw( sha1 );
 use HTTP::Response 5;
 use LWP::Authen::Wsse;
+use MT::Test qw( _run_app );
 use MIME::Base64 qw( encode_base64 );
+use Test::More;
 use XML::LibXML;
 
 our @ISA = qw( Exporter );
-our @EXPORT_OK = qw( wsse_auth run_app );
+our @EXPORT_OK = qw( basic_auth wsse_auth run_app );
 
+
+sub basic_auth {
+    return (
+        Authorization => "Basic " . encode_base64(join q{:}, "Chuck D", "seecret"),
+    );
+}
 
 sub wsse_auth {
     my $username = "Chuck D";
