@@ -22,7 +22,7 @@ sub _create_issued {
                                     $co_list[2], $co_list[1]-1, $co_list[0]);
     my $so = $blog->server_offset;
     $so += 1 if (localtime $epoch)[8];
-    $so = sprintf("%s%02d:%02d", $so < 0 ? '-' : '+', 
+    $so = sprintf("%s%02d:%02d", $so < 0 ? '-' : '+',
                   abs(int $so), abs($so - int $so)*60);
     $co .= $so;
 }
@@ -97,21 +97,21 @@ sub new_with_entry {
     $atom;
 }
 
-sub new_with_asset { 
-    my $class = shift; 
-    my($asset, %param) = @_; 
-    my $atom = $class->new(%param); 
-    $atom->title($asset->label); 
+sub new_with_asset {
+    my $class = shift;
+    my($asset, %param) = @_;
+    my $atom = $class->new(%param);
+    $atom->title($asset->label);
     $atom->summary($asset->description);
     my $blog = MT::Blog->load($asset->blog_id)
         or return undef;
-    $atom->issued(_create_issued($asset->created_on, $blog)); 
-    $atom->add_link({ rel => 'alternate', type => $asset->mime_type, 
-                      href => $asset->url, title => $asset->label }); 
+    $atom->issued(_create_issued($asset->created_on, $blog));
+    $atom->add_link({ rel => 'alternate', type => $asset->mime_type,
+                      href => $asset->url, title => $asset->label });
     my ($host) = $blog->site_url =~ m!^https?://([^/:]+)(:\d+)?/!;
     $atom->id('tag:' . $host . ':asset-' . $asset->id);
-    return $atom; 
-} 
+    return $atom;
+}
 
 sub new_with_comment {
     my $class = shift;

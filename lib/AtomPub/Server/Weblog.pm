@@ -97,7 +97,7 @@ sub authenticate {
     if (my $blog_id = $app->{param}{blog_id}) {
         $app->{blog} = MT::Blog->load($blog_id)
             or return $app->error(400, "Invalid blog ID '$blog_id'");
-        $app->{user} 
+        $app->{user}
             or return $app->error(403, "Authenticate");
         if ($app->{user}->is_superuser()) {
             $app->{perms} = new MT::Permission;
@@ -183,7 +183,7 @@ sub get_weblogs {
     }
     $app->response_code(200);
     $app->response_content_type('application/atomsvc+xml');
-    '<?xml version="1.0" encoding="utf-8"?>' . "\n" .                                                          
+    '<?xml version="1.0" encoding="utf-8"?>' . "\n" .
         $doc->toString;
 }
 
@@ -213,7 +213,7 @@ sub get_categories {
 
     $app->response_code(200);
     $app->response_content_type('application/atomcat+xml');
-    '<?xml version="1.0" encoding="utf-8"?>' . "\n" .                                                          
+    '<?xml version="1.0" encoding="utf-8"?>' . "\n" .
         $doc->toString;
 }
 
@@ -545,13 +545,13 @@ sub _upload_to_asset {
     $fname = basename($fname);
     return $app->error(400, "Invalid or empty filename")
         if $fname =~ m!/|\.\.|\0|\|!;
-        
+
     # Copy the filename and extract the extension.
-        
+
     my $ext = $fname;
     $ext =~ m!.*\.(.*)$!;       ## Extract the characters to the right of the last dot delimiter / period
-    $ext = $1;                  ## Those characters are the file extension    
-        
+    $ext = $1;                  ## Those characters are the file extension
+
     ###
     #
     # Look at new Movable Type configuration parameter AssetFileExtensions to
@@ -561,12 +561,12 @@ sub _upload_to_asset {
     # This code is very similar to the AssetFileExtensions check in XMLRPCServer.pm.
     #
     ###
-    
+
     if ( my $allow_exts = $app->config('AssetFileExtensions') ) {
-        
+
         # Split the parameters of the AssetFileExtensions configuration directive into items in an array
         my @allowed = map { if ( $_ =~ m/^\./ ) { qr/$_/i } else { qr/\.$_/i } } split '\s?,\s?', $allow_exts;
-        
+
         # Find the extension in the array
         my @found = grep(/\b$ext\b/, @allowed);
 
@@ -575,18 +575,18 @@ sub _upload_to_asset {
             return $app->error(500, $app->translate('The file ([_1]) you uploaded is not allowed.', $fname));
         }
     }
-    
+
     my $local_relative = File::Spec->catfile('%r', $fname);
     my $local = File::Spec->catfile($blog->site_path, $fname);
     my $fmgr = $blog->file_mgr;
-    
+
     ###
     #
     # Had to extract the declaration of $base and $path from the succeeding line
     # because $ext is now declared in the code section above this comment.
     #
     ###
-    
+
     my ($base, $path);
     ($base, $path, $ext) = File::Basename::fileparse($local, '\.[^\.]*');
     $ext = $MIME2EXT{$type} unless $ext;
@@ -597,36 +597,36 @@ sub _upload_to_asset {
     while ($fmgr->exists($path . $base . $ext)) {
         $base = $base_copy . '_' . $i++;
     }
-        
+
     $local = $path . $base . $ext;
     my $local_basename = $base . $ext;
     my $data = $content->body;
-    
-    ### 
-    # 
-    # Function to evaluate the first 1k of content in an image file to see if it contains HTML or JavaScript 
-    # content in the body.  Image files that contain embedded HTML or JavaScript are 
-    # prohibited in order to prevent a known IE 6 and 7 content-sniffing vulnerability. 
-    # 
-    # This code based on the ImageValidate plugin written by Six Apart. 
-    # 
+
     ###
-    
+    #
+    # Function to evaluate the first 1k of content in an image file to see if it contains HTML or JavaScript
+    # content in the body.  Image files that contain embedded HTML or JavaScript are
+    # prohibited in order to prevent a known IE 6 and 7 content-sniffing vulnerability.
+    #
+    # This code based on the ImageValidate plugin written by Six Apart.
+    #
+    ###
+
     ## Make a copy of the body that only contains the first 1k bytes.
     my $html_test_string = substr($data, 0, 1024);
-    
+
     ## Using an error message format that already exists in all localizations of Movable Type 4.
-    return $app->error(500, MT->translate("Saving [_1] failed: [_2]", $local_basename, "Invalid image file format.")) if 
+    return $app->error(500, MT->translate("Saving [_1] failed: [_2]", $local_basename, "Invalid image file format.")) if
         ( $html_test_string =~ m/^\s*<[!?]/ ) ||
         ( $html_test_string =~ m/<(HTML|SCRIPT|TITLE|BODY|HEAD|PLAINTEXT|TABLE|IMG|PRE|A)/i ) ||
         ( $html_test_string =~ m/text\/html/i ) ||
         ( $html_test_string =~ m/^\s*<(FRAMESET|IFRAME|LINK|BASE|STYLE|DIV|P|FONT|APPLET)/i ) ||
         ( $html_test_string =~ m/^\s*<(APPLET|META|CENTER|FORM|ISINDEX|H[123456]|B|BR)/i )
-        ;    
-            
+        ;
+
     defined(my $bytes = $fmgr->put_data($data, $local, 'upload'))
         or return $app->error(500, "Error writing uploaded file");
-        
+
     eval { require Image::Size; };
     return $app->error(500, MT->translate("Perl module Image::Size is required to determine width and height of uploaded images.")) if $@;
     my ( $w, $h, $id ) = Image::Size::imgsize($local);
@@ -694,7 +694,7 @@ sub _upload_to_asset {
 sub handle_upload {
     my $app = shift;
     my $blog = $app->{blog};
-    
+
     my $asset = $app->_upload_to_asset or return;
 
     my $link = XML::Atom::Link->new;
