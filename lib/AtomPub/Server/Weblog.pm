@@ -78,6 +78,34 @@ sub apply_basename {
     $entry;
 }
 
+sub associate_assets {
+    my $app = shift;
+    my ($entry, $atom) = @_;
+
+    if (my @link = $atom->link) {
+        my $img_html = '';
+        for my $link (@link) {
+            next unless $link->rel eq 'related';
+            my($asset_id) = $link->href =~ /asset\-(\d+)$/;
+            if ($asset_id) {
+                require MT::Asset;
+                my $a = MT::Asset->load($asset_id);
+                next unless $a;
+                my $pkg = MT::Asset->handler_for_file($a->file_name);
+                my $asset = bless $a, $pkg;
+                $img_html .= $asset->as_html({ include => 1 });
+            }
+        }
+        if ($img_html) {
+            $img_html .= qq{<br style="clear: left;" />\n\n};
+            my $body = $entry->text;
+            $entry->text($img_html . $body);
+        }
+    }
+
+    return $entry;
+}
+
 sub handle_request {
     my $app = shift;
     $app->authenticate or return;
@@ -269,17 +297,21 @@ sub new_entry {
 
     my $entry = MT::Entry->new;
     my $orig_entry = $entry->clone;
-    $entry->blog_id($blog->id);
-    $entry->author_id($user->id);
-    $entry->created_by($user->id);
-    # TODO: support post publishing instruction?
-    $entry->status($perms->can_publish_post ? MT::Entry::RELEASE() : MT::Entry::HOLD() );
-    $entry->allow_comments($blog->allow_comments_default);
-    $entry->allow_pings($blog->allow_pings_default);
-    $entry->convert_breaks($blog->convert_paras);
-    $entry->title(encode_text($atom->title,'utf-8',$enc));
-    $entry->text($body);
-    $entry->excerpt(encode_text($atom->summary,'utf-8',$enc));
+    $entry->set_values({
+        blog_id => $blog->id,
+        author_id => $user->id,
+        created_by => $user->id,
+        # TODO: support post publishing instruction?
+        status => $perms->can_publish_post ? MT::Entry::RELEASE() : MT::Entry::HOLD(),
+        allow_comments => $blog->allow_comments_default,
+        allow_pings => $blog->allow_pings_default,
+        convert_breaks => $blog->convert_paras,
+
+        title => encode_text($atom->title, 'utf-8', $enc),
+        text => $body,
+        excerpt => encode_text($atom->summary, 'utf-8', $enc),
+    });
+
     if (my $iso = $atom->issued) {
         my $pub_ts = MT::Util::iso2ts($blog, $iso);
         $entry->authored_on($pub_ts);
@@ -296,27 +328,7 @@ sub new_entry {
     $app->apply_basename($entry, $atom);
     $entry->discover_tb_from_entry();
 
-    if (my @link = $atom->link) {
-        my $i = 0;
-        my $img_html = '';
-        my $num_links = scalar @link;
-        for my $link (@link) {
-            next unless $link->rel eq 'related';
-            my($asset_id) = $link->href =~ /asset\-(\d+)$/;
-            if ($asset_id) {
-                require MT::Asset;
-                my $a = MT::Asset->load($asset_id);
-                next unless $a;
-                my $pkg = MT::Asset->handler_for_file($a->file_name);
-                my $asset = bless $a, $pkg;
-                $img_html .= $asset->as_html({ include => 1 });
-            }
-        }
-        if ($img_html) {
-            $img_html .= qq{<br style="clear: left;" />\n\n};
-            $entry->text($img_html . $body);
-        }
-    }
+    $app->associate_assets($entry, $atom);
 
     MT->run_callbacks('api_pre_save.entry', $app, $entry, $orig_entry)
         or return $app->error(500, MT->translate("PreSave failed [_1]", MT->errstr));
