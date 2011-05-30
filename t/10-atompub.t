@@ -8,7 +8,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 34;
+use Test::More tests => 30;
 
 use AtomPub::Test qw( wsse_auth run_app );
 use XML::LibXML;
@@ -20,29 +20,6 @@ out_like(
     qr{ Status:\s200 \b .* \b 1 \z }xms,
     "Just a 1 on the root URL",
 );
-
-out_like(
-    'AtomPub::Server',
-    {
-        __test_path_info => q{1.0},
-    },
-    qr{ Status:\s401 }xms,
-    "Unauthorized on the weblogs URL",
-);
-like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the weblogs URL");
-
-{
-    local $ENV{HTTP_AUTHORIZATION} = q{Derp herp="derp"};
-    out_like(
-        'AtomPub::Server',
-        {
-            __test_path_info => q{1.0},
-        },
-        qr{ Status:\s401 }xms,
-        "Unauthorized on the weblogs URL with bad auth",
-    );
-    like(get_last_output(), qr{ X-WSSE }xms, "Unauthorized error message on the weblogs URL with bad auth");
-}
 
 {
     my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0', 'GET', { wsse_auth() });
