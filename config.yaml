@@ -12,3 +12,5 @@ config_settings:
         type: HASH
         default:
             1.0: AtomPub::Server::Weblog
+    AtomAppAuthentication:
+        default: AtomPub::Authen::WSSE
