@@ -82,28 +82,35 @@ sub associate_assets {
     my $app = shift;
     my ($entry, $atom) = @_;
 
-    if (my @link = $atom->link) {
-        my $img_html = '';
-        for my $link (@link) {
-            next unless $link->rel eq 'related';
-            my($asset_id) = $link->href =~ /asset\-(\d+)$/;
-            if ($asset_id) {
-                require MT::Asset;
-                my $a = MT::Asset->load($asset_id);
-                next unless $a;
-                my $pkg = MT::Asset->handler_for_file($a->file_name);
-                my $asset = bless $a, $pkg;
-                $img_html .= $asset->as_html({ include => 1 });
-            }
-        }
-        if ($img_html) {
-            $img_html .= qq{<br style="clear: left;" />\n\n};
-            my $body = $entry->text;
-            $entry->text($img_html . $body);
-        }
-    }
+    my @asset_ids;
+    my $img_html = q{};
+    LINK: for my $link ($atom->link) {
+        next LINK unless $link->rel eq 'related';
 
-    return $entry;
+        my $asset_id;
+        if ($link->href =~ /asset\-(\d+)$/) {
+            $asset_id = $1;
+        }
+        elsif ($link->href =~ m{ asset_id=(\d+) }xms) {
+            $asset_id = $1;
+        }
+
+        next LINK if !$asset_id;
+        require MT::Asset;
+        my $a = MT::Asset->load($asset_id)
+            or next LINK;
+        push @asset_ids, $asset_id;
+
+        my $pkg = MT::Asset->handler_for_file($a->file_name);
+        my $asset = bless $a, $pkg;
+        $img_html .= $asset->as_html({ include => 1 });
+    }
+    if ($img_html) {
+        my $br = qq{<br style="clear: left;" />\n\n};
+        my $text = $entry->text;
+        $entry->text($img_html . $br . $text);
+    }
+    return @asset_ids;
 }
 
 sub handle_request {
@@ -328,7 +335,7 @@ sub new_entry {
     $app->apply_basename($entry, $atom);
     $entry->discover_tb_from_entry();
 
-    $app->associate_assets($entry, $atom);
+    my @asset_ids = $app->associate_assets($entry, $atom);
 
     MT->run_callbacks('api_pre_save.entry', $app, $entry, $orig_entry)
         or return $app->error(500, MT->translate("PreSave failed [_1]", MT->errstr));
@@ -351,6 +358,33 @@ sub new_entry {
         $place->blog_id($blog->id);
         $place->category_id($cat->id);
         $place->save or return $app->error(500, $place->errstr);
+    }
+
+    # Add any ObjectAssets for assets that don't have them (but don't remove any).
+    if (@asset_ids) {
+        my %objectassets;
+        my @objectassets = MT::ObjectAsset->load({
+            blog_id => $entry->blog_id,
+            asset_id => \@asset_ids,
+            object_id => $entry->id,
+            object_ds => 'entry',
+        });
+        for my $oa (@objectassets) {
+            $objectassets{$oa->asset_id} = 1;
+        }
+
+        ASSET_ID: for my $asset_id (@asset_ids) {
+            next ASSET_ID if $objectassets{$asset_id};
+
+            my $oa = MT::ObjectAsset->new;
+            $oa->set_values({
+                asset_id => $asset_id,
+                blog_id => $entry->blog_id,
+                object_id => $entry->id,
+                object_ds => 'entry',
+            });
+            $oa->save();
+        }
     }
 
     MT->run_callbacks('api_post_save.entry', $app, $entry, $orig_entry);
