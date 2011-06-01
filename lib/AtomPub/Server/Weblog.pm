@@ -43,7 +43,21 @@ sub new_with_entry {
     my $mo = AtomPub::Atom::Entry::_create_issued($entry->modified_on, $entry->blog);
     $atom->set(NS_APP(), 'edited', $mo);
 
-    $atom;
+    my $objectasset_iter = MT::ObjectAsset->load_iter({
+        blog_id => $entry->blog_id,
+        object_ds => 'entry',
+        object_id => $entry->id,
+    });
+    while (my $objectasset = $objectasset_iter->()) {
+        $atom->add_link({
+            rel => 'related',
+            type => $app->atom_content_type,
+            href => join(q{}, $app->base, $app->uri, '/blog_id=', $entry->blog_id, '/asset_id=',
+                $objectasset->asset_id),
+        });
+    }
+
+    return $atom;
 }
 
 sub new_with_asset {

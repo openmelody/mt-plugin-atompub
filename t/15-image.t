@@ -8,7 +8,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 18;
+use Test::More tests => 20;
 
 use AtomPub::Test qw( basic_auth run_app );
 use File::Spec;
@@ -116,6 +116,12 @@ EOF
         object_ds => 'entry',
     });
     ok($oa, "Creating a new post that linked to a created asset associated them");
+
+    my @related = $xpath->findnodes('./atom:link[@rel="related"]', $root);
+    is(scalar @related, 1, "Entry has one related link");
+    my ($related) = @related;
+    is($related->getAttribute('href'), 'http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/asset_id=4',
+        "Entry's related link is uploaded image's AtomPub URI");
 }
 
 
