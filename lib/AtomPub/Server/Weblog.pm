@@ -71,6 +71,32 @@ sub new_with_asset {
     return $atom;
 }
 
+sub apply_custom_fields {
+    my $app = shift;
+    my ($obj, $atom) = @_;
+
+    return if !eval {
+        require CustomFields::Field;
+        require CustomFields::Util;
+        1
+    };
+
+    my %meta;
+    my $field_iter = CustomFields::Field->load_iter({
+        blog_id => [$obj->blog_id, 0],
+        obj_type => $obj->datasource,
+    });
+    while (my $field = $field_iter->()) {
+        my $value = $atom->get(NS_TYPEPAD(), $field->basename);
+        $meta{$field->basename} = $field->type eq 'checkbox' ? $value || q{0}
+                                : $field->type eq 'datetime' ? ($value ne '' ? $value : undef)
+                                :                              $value
+                                ;
+    }
+
+    CustomFields::Util::save_meta($obj, \%meta) if %meta;
+}
+
 sub apply_basename {
     my $app = shift;
     my ($entry, $atom) = @_;
@@ -345,7 +371,7 @@ sub new_entry {
             $entry->status(MT::Entry::FUTURE())
         }
     }
-## xxx mt/typepad-specific fields
+
     $app->apply_basename($entry, $atom);
     $entry->discover_tb_from_entry();
 
@@ -364,7 +390,7 @@ sub new_entry {
         category => 'new',
         metadata => $entry->id
     });
-    ## Save category, if present.
+
     if ($cat) {
         my $place = MT::Placement->new;
         $place->is_primary(1);
@@ -373,6 +399,8 @@ sub new_entry {
         $place->category_id($cat->id);
         $place->save or return $app->error(500, $place->errstr);
     }
+
+    $app->apply_custom_fields($entry, $atom);
 
     # Add any ObjectAssets for assets that don't have them (but don't remove any).
     if (@asset_ids) {
@@ -472,7 +500,7 @@ sub edit_post {
             $entry->status(MT::Entry::FUTURE())
         }
     }
-## xxx mt/typepad-specific fields
+
     $app->apply_basename($entry, $atom);
     $entry->discover_tb_from_entry();
 
@@ -489,6 +517,8 @@ sub edit_post {
         category => 'new',
         metadata => $entry->id
     });
+
+    $app->apply_custom_fields($entry, $atom);
 
     MT->run_callbacks('api_post_save.entry', $app, $entry, $orig_entry);
 

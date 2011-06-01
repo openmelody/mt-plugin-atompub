@@ -81,7 +81,6 @@ EOF
     $xpath->registerNs('app', 'http://www.w3.org/2007/app');
     $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
     my $id = $xpath->findvalue('./atom:id', $root);
-    diag($id);
     ok($id, "Response post has an Atom ID");
     my $title = $xpath->findvalue('./atom:title', $root);
     is($title, "New AtomPub Post", "Response post has correct title");
