@@ -14,7 +14,7 @@ plan skip_all => "The Commercial Pack is required to test Custom Fields"
 
 require MT::Test;
 MT::Test->import(qw( :app :db :data ));
-plan tests => 3;
+plan tests => 6;
 
 use AtomPub::Test qw( basic_auth run_app );
 use XML::LibXML;
@@ -54,6 +54,18 @@ EOF
     my $entry = MT::Entry->load(24);
     my $meta = CustomFields::Util::get_meta($entry);
     is($meta->{foo}, 'homina homina', "Entry's custom field was set");
+
+    my $doc = XML::LibXML->load_xml( string => $resp->decoded_content );
+    my $root = $doc->documentElement;
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
+    $xpath->registerNs('cf', 'http://sixapart.com/atom/typepad#');
+
+    my @foos = $xpath->findnodes('./cf:foo', $root);
+    is(scalar @foos, 1, "Response repeated our one foo element");
+    my ($foo) = @foos;
+    is($foo->textContent, 'homina homina', "Response's foo element had expected content");
 }
 
 

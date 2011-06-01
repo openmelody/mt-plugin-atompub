@@ -57,6 +57,13 @@ sub new_with_entry {
         });
     }
 
+    if (eval { require CustomFields::Util; 1 }) {
+        my $meta = CustomFields::Util::get_meta($entry);
+        while (my ($k, $v) = each %$meta) {
+            $atom->set(NS_TYPEPAD(), $k, $v);
+        }
+    }
+
     return $atom;
 }
 
