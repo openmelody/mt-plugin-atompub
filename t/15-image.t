@@ -77,7 +77,7 @@ sub load_test_gif {
         "Created asset's file used Slug header for filename");
 }
 
-# blog posts that refer to assets cause MT::ObjectAsset associations
+# blog posts that are rel="related" to assets cause MT::ObjectAsset associations
 {
     my $body = <<'EOF';
 <?xml version="1.0" encoding="utf-8"?>
@@ -107,7 +107,7 @@ EOF
 
     my ($content) = $xpath->findnodes('./atom:content', $root);
     is($content->getAttribute('type'), 'html', "New post posted as HTML");
-    is($content->textContent(), qq{<img alt="" src="http://narnia.na/nana/super-awesome-mega-gif.gif" width="233" height="68"  /><br style="clear: left;" />\n\n<p>This is the post content that goes in the post.</p>}, "New post had intended HTML content");
+    is($content->textContent(), q{<p>This is the post content that goes in the post.</p>}, "New post had specified HTML content (no additions)");
 
     my $oa = MT::ObjectAsset->load({
         blog_id => 1,
@@ -115,7 +115,7 @@ EOF
         object_id => 24,
         object_ds => 'entry',
     });
-    ok($oa, "Creating a new post that linked to a created asset associated them");
+    ok($oa, "Creating a new post that related to a created asset associated them");
 
     my @related = $xpath->findnodes('./atom:link[@rel="related"]', $root);
     is(scalar @related, 1, "Entry has one related link");
@@ -124,5 +124,57 @@ EOF
         "Entry's related link is uploaded image's AtomPub URI");
 }
 
+
+# blog posts that link to assets cause MT::ObjectAsset associations
+{
+    my $body = <<'EOF';
+<?xml version="1.0" encoding="utf-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+    <title>Super Awesome Mega Post #2</title>
+    <content type="html">
+        &lt;p&gt;&lt;img src="http://narnia.na/nana/super-awesome-mega-gif.gif"&gt;&lt;/p&gt;
+
+        &lt;p&gt;This is the post content that goes in the post.&lt;/p&gt;
+    </content>
+</entry>
+EOF
+    my $resp = run_app('http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1', 'POST', {
+        'Content-Type' => 'application/atom+xml;type=entry',
+        'Slug' => 'super-awesome-mega-post-2',
+        basic_auth()
+    }, $body);
+    is($resp->code, 201, "New post request succeeded (HTTP Created)");
+    like($resp->header('Content-Type'), qr{ \A application/atom\+xml }xms, "Response creating post is some Atom document");
+
+    my $location = $resp->header('Location');
+    is($location, 'http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/entry_id=25',
+        "Response creating new asset includes API URL of new asset");
+
+    my $doc = XML::LibXML->load_xml( string => $resp->decoded_content );
+    my $root = $doc->documentElement;
+    my $xpath = XML::LibXML::XPathContext->new;
+    $xpath->registerNs('app', 'http://www.w3.org/2007/app');
+    $xpath->registerNs('atom', 'http://www.w3.org/2005/Atom');
+
+    my ($content) = $xpath->findnodes('./atom:content', $root);
+    is($content->getAttribute('type'), 'html', "New post posted as HTML");
+    like($content->textContent(), qr{ <p><img \s src="http://narnia.na/nana/super-awesome-mega-gif\.gif"></p> \s+ <p>This\s is\s the\s post\s content\s that\s goes\s in\s the\s post\.</p> }xms, "New post had specified HTML content (no additions)");
+
+    my $a = MT::Asset->load(4);
+
+    my $oa = MT::ObjectAsset->load({
+        blog_id => 1,
+        asset_id => 4,
+        object_id => 25,
+        object_ds => 'entry',
+    });
+    ok($oa, "Creating a new post that merely linked to a created asset associated them");
+
+    my @related = $xpath->findnodes('./atom:link[@rel="related"]', $root);
+    is(scalar @related, 1, "Entry has one related link");
+    my ($related) = @related;
+    is($related->getAttribute('href'), 'http://www.example.com/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/asset_id=4',
+        "Entry's related link is uploaded image's AtomPub URI");
+}
 
 1;

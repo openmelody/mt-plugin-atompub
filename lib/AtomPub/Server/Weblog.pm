@@ -7,16 +7,18 @@
 package AtomPub::Server::Weblog;
 use strict;
 
-use MT::I18N qw( encode_text );
-use XML::Atom;
-use XML::Atom::Feed;
 use base qw( AtomPub::Server );
+
+use File::Basename;
+use File::Spec;
+use HTML::LinkExtor;
 use MT::Blog;
 use MT::Entry;
-use MT::Util qw( encode_xml format_ts );
+use MT::I18N qw( encode_text );
 use MT::Permission;
-use File::Spec;
-use File::Basename;
+use MT::Util qw( encode_xml format_ts );
+use XML::Atom;
+use XML::Atom::Feed;
 
 use constant NS_APP => 'http://www.w3.org/2007/app';
 use constant NS_DC => 'http://purl.org/dc/elements/1.1/';
@@ -130,7 +132,7 @@ sub associate_assets {
     my ($entry, $atom) = @_;
 
     my @asset_ids;
-    my $img_html = q{};
+
     LINK: for my $link ($atom->link) {
         next LINK unless $link->rel eq 'related';
 
@@ -147,16 +149,31 @@ sub associate_assets {
         my $a = MT::Asset->load($asset_id)
             or next LINK;
         push @asset_ids, $asset_id;
+    }
 
-        my $pkg = MT::Asset->handler_for_file($a->file_name);
-        my $asset = bless $a, $pkg;
-        $img_html .= $asset->as_html({ include => 1 });
+    my $blog = $entry->blog;
+    my $site_url = $blog->site_url;
+    my $extor = HTML::LinkExtor->new(undef, $entry->permalink);
+    $extor->parse($entry->text);
+    TAG: for my $tag ($extor->links) {
+        use Data::Dumper;
+        my ($tagname, %tagattr) = @$tag;
+        my $url = $tagname eq 'img' ? $tagattr{src} : $tagattr{href};
+        if ($url !~ s{ \A \Q$site_url\E }{}xms) {
+            next TAG;
+        }
+
+        my $local = File::Spec->catfile('%r', $url);
+        my $asset_pkg = MT::Asset->handler_for_file($local);
+        my $asset = $asset_pkg->load({
+            blog_id => $blog->id,
+            file_path => $local,
+        });
+        next TAG if !$asset;
+
+        push @asset_ids, $asset->id;
     }
-    if ($img_html) {
-        my $br = qq{<br style="clear: left;" />\n\n};
-        my $text = $entry->text;
-        $entry->text($img_html . $br . $text);
-    }
+
     return @asset_ids;
 }
 
