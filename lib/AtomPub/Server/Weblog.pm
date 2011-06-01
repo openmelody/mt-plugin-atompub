@@ -336,18 +336,6 @@ sub new_entry {
     my $blog = $app->{blog};
     my $user = $app->{user};
     my $perms = $app->{perms};
-    my $enc = $app->config('PublishCharset');
-
-    ## Check for category in dc:subject. We will save it later if
-    ## it's present, but we want to give an error now if necessary.
-    my($cat);
-    if (my $label = $atom->get(NS_DC, 'subject')) {
-        my $label_enc = encode_text($label,'utf-8',$enc);
-        $cat = MT::Category->load({ blog_id => $blog->id, label => $label_enc })
-            or return $app->error(400, "Invalid category '$label'");
-    }
-
-    my $body = encode_text(MT::I18N::utf8_off($atom->content->body),'utf-8',$enc);
 
     my $entry = MT::Entry->new;
     my $orig_entry = $entry->clone;
@@ -360,12 +348,47 @@ sub new_entry {
         allow_comments => $blog->allow_comments_default,
         allow_pings => $blog->allow_pings_default,
         convert_breaks => $blog->convert_paras,
-
-        title => encode_text($atom->title, 'utf-8', $enc),
-        text => $body,
-        excerpt => encode_text($atom->summary, 'utf-8', $enc),
     });
 
+    $app->update_entry_from_atom($entry, $orig_entry, $atom)
+        or return;
+
+    $app->publish($entry);
+
+    $app->response_code(201);
+    $app->response_content_type('application/atom+xml');
+    my $edit_uri = $app->base . $app->uri . '/blog_id=' . $entry->blog_id . '/entry_id=' . $entry->id;
+    $app->set_header('Location', $edit_uri);
+    $atom = $app->new_with_entry($entry);
+    $atom->add_link({ rel => $app->edit_link_rel,
+                      href => $edit_uri,
+                      type => 'application/atom+xml',  # even in Legacy
+                      title => $entry->title });
+    return $atom->as_xml;
+}
+
+sub update_entry_from_atom {
+    my $app = shift;
+    my ($entry, $orig_entry, $atom) = @_;
+
+    my $blog = $app->{blog};
+    my $user = $app->{user};
+    my $enc = $app->config('PublishCharset');
+
+    ## Check for category in dc:subject. We will save it later if
+    ## it's present, but we want to give an error now if necessary.
+    my($cat);
+    if (my $label = $atom->get(NS_DC, 'subject')) {
+        my $label_enc = encode_text($label,'utf-8',$enc);
+        $cat = MT::Category->load({ blog_id => $blog->id, label => $label_enc })
+            or return $app->error(400, "Invalid category '$label'");
+    }
+
+    # TODO: not all fields are required on update, so we shouldn't set these if they're not present.
+    $entry->title(encode_text($atom->title, 'utf-8', $enc));
+    my $body = encode_text(MT::I18N::utf8_off($atom->content->body),'utf-8',$enc);
+    $entry->text($body);
+    $entry->excerpt(encode_text($atom->summary, 'utf-8', $enc));
     if (my $iso = $atom->issued) {
         my $pub_ts = MT::Util::iso2ts($blog, $iso);
         $entry->authored_on($pub_ts);
@@ -379,6 +402,7 @@ sub new_entry {
         }
     }
 
+    $entry->modified_by($user->id);
     $app->apply_basename($entry, $atom);
     $entry->discover_tb_from_entry();
 
@@ -389,9 +413,13 @@ sub new_entry {
 
     $entry->save or return $app->error(500, $entry->errstr);
 
+    my @message_params = ($user->name, $user->id, $entry->id, $entry->class_label);
+    my $message = $orig_entry->id ? $app->translate("User '[_1]' (user #[_2]) added [lc,_4] #[_3]", @message_params)
+                :                   $app->translate("User '[_1]' (user #[_2]) edited [lc,_4] #[_3]", @message_params)
+                ;
     require MT::Log;
     $app->log({
-        message => $app->translate("User '[_1]' (user #[_2]) added [lc,_4] #[_3]", $user->name, $user->id, $entry->id, $entry->class_label),
+        message => $message,
         level => MT::Log::INFO(),
         class => 'entry',
         category => 'new',
@@ -438,17 +466,7 @@ sub new_entry {
 
     MT->run_callbacks('api_post_save.entry', $app, $entry, $orig_entry);
 
-    $app->publish($entry);
-    $app->response_code(201);
-    $app->response_content_type('application/atom+xml');
-    my $edit_uri = $app->base . $app->uri . '/blog_id=' . $entry->blog_id . '/entry_id=' . $entry->id;
-    $app->set_header('Location', $edit_uri);
-    $atom = $app->new_with_entry($entry);
-    $atom->add_link({ rel => $app->edit_link_rel,
-                      href => $edit_uri,
-                      type => 'application/atom+xml',  # even in Legacy
-                      title => $entry->title });
-    $atom->as_xml;
+    return 1;
 }
 
 sub new_asset {
@@ -490,44 +508,9 @@ sub edit_post {
         or return $app->error(400, "Invalid entry_id");
     return $app->error(403, "Access denied")
         unless $app->{perms}->can_edit_entry($entry, $app->{user});
-    my $orig_entry = $entry->clone;
-    $entry->title(encode_text($atom->title,'utf-8',$enc));
-    $entry->text(encode_text(MT::I18N::utf8_off($atom->content()->body()),'utf-8',$enc));
-    $entry->excerpt(encode_text($atom->summary,'utf-8',$enc));
-    $entry->modified_by($app->{user}->id);
-    if (my $iso = $atom->issued) {
-        my $pub_ts = MT::Util::iso2ts($blog, $iso);
-        $entry->authored_on($pub_ts);
-        require MT::DateTime;
-        if ( 0 < MT::DateTime->compare( blog => $blog,
-                a => $pub_ts,
-                b => { value => time(), type => 'epoch' } )
-           )
-        {
-            $entry->status(MT::Entry::FUTURE())
-        }
-    }
 
-    $app->apply_basename($entry, $atom);
-    $entry->discover_tb_from_entry();
-
-    MT->run_callbacks('api_pre_save.entry', $app, $entry, $orig_entry)
-        or return $app->error(500, MT->translate("PreSave failed [_1]", MT->errstr));
-
-    $entry->save or return $app->error(500, "Entry not saved");
-
-    require MT::Log;
-    $app->log({
-        message => $app->translate("User '[_1]' (user #[_2]) edited [lc,_4] #[_3]", $app->{user}->name, $app->{user}->id, $entry->id, $entry->class_label),
-        level => MT::Log::INFO(),
-        class => 'entry',
-        category => 'new',
-        metadata => $entry->id
-    });
-
-    $app->apply_custom_fields($entry, $atom);
-
-    MT->run_callbacks('api_post_save.entry', $app, $entry, $orig_entry);
+    $app->update_entry_from_atom($entry, $entry->clone, $atom)
+        or return;
 
     if ($entry->status == MT::Entry::RELEASE()) {
         $app->publish($entry) or return $app->error(500, "Entry not published");
@@ -535,7 +518,7 @@ sub edit_post {
     $app->response_code(200);
     $app->response_content_type($app->atom_content_type);
     $atom = $app->new_with_entry($entry);
-    $atom->as_xml;
+    return $atom->as_xml;
 }
 
 sub get_posts {
