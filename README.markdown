@@ -36,7 +36,7 @@ When posting, use the Atom Publishing Protocol as defined in [RFC 5023][].
 
 Use [HTTP Basic authentication][] with the username and **Web Services password** for an author account in your MT/Melody site. You'll find the field for setting your account's Web Services password in the "Edit Profile" screen of the MT/Melody application.
 
-HTTP Basic authentication should only be used when . To switch to WSSE authentication, set the `AtomAppAuthentication` configuration directive:
+HTTP Basic authentication should only be used when the application is secured with HTTPS. To use WSSE authentication instead, set the `AtomAppAuthentication` configuration directive:
 
     AtomAppAuthentication AtomPub::Authen::WSSE
 
@@ -79,7 +79,7 @@ To add a new file or image to the MT site, `POST` the file as a Media Resource (
 
 The uploaded image is available at the URL given as the `src` attribute of the Media Link Entry's `content` element.
 
-The AtomPub plugin does not provide the ability to replace the file at this time, so the Media Link Entry will not include an `edit-media` link.
+As the AtomPub plugin does not provide the ability to replace the file for an existing Asset, the Media Link Entry will not include an `edit-media` link.
 
 ### Associating images with blog entries ###
 
@@ -132,28 +132,15 @@ You can also associate media without linking to it in the post content by provid
             href="http://www.example.com/.../1.0/blog_id=1/asset_id=1"/>
         ...
 
-Such media is not added to your entry's content. Adding media in this way is useful if your blog theme uses such associated media some other way.
+Such media is not automatically linked from or embedded in your entry's content, so the entry will contain only the HTML specified in your `<content>` element. Adding media in this way is useful if your blog theme uses such associated media some other way.
 
-As there is no `<link rel="unrelated">`, media associated with an entry through AtomPub cannot be disassociated that way. Media can be removed from your entries by editing them in the MT/Melody application.
+As there is no `<link rel="unrelated">`, media associated with an entry cannot be disassociated through the AtomPub interface. Media can be removed from your entries by editing them in the MT/Melody application.
 
 ### Using custom fields ###
 
-With the Custom Fields plugin, Movable Type allows site administrators to provide new data fields for the entry object. The AtomPub plugin provides the values of text Custom Fields when retrieving entries as elements in the `http://sixapart.com/atom/typepad#` namespace:
+With the Custom Fields plugin, Movable Type allows site administrators to provide new data fields for the entry object. The AtomPub plugin provides the values of text Custom Fields when retrieving entries as elements in the `http://sixapart.com/atom/typepad#` namespace.
 
-    HTTP/1.1 200 OK
-    Date: Fri, 7 Oct 2005 17:17:11 GMT
-    Content-Length: nnn
-    Content-Type: application/atom+xml;type=entry
-    
-    <?xml version="1.0"?>
-    <entry ...
-        <content type="html">
-            &lt;p&gt;Such a beautiful day!&lt;/p&gt;
-        </content>
-        <weather xmlns="http://sixapart.com/atom/typepad#">beautiful</weather>
-        ...
-
-To set Custom Field values, provide them as when you `POST` or `PUT` an entry. Use the Custom Field's basename as the node name of the element.
+To set Custom Field values, provide them as `http://sixapart.com/atom/typepad#` namespace elements when you `POST` or `PUT` an entry. Use the Custom Field's basename as the node name of the element.
 
     PUT /mt/plugins/AtomPub/mt-atom.cgi/1.0/blog_id=1/entry_id=1
     Host: www.example.com
@@ -170,6 +157,16 @@ To set Custom Field values, provide them as when you `POST` or `PUT` an entry. U
         ...
 
     HTTP/1.1 200 OK
-    ...
+    Date: Fri, 7 Oct 2005 17:17:11 GMT
+    Content-Length: nnn
+    Content-Type: application/atom+xml;type=entry
+    
+    <?xml version="1.0"?>
+    <entry ...
+        <content type="html">
+            &lt;p&gt;Such a beautiful day!&lt;/p&gt;
+        </content>
+        <weather xmlns="http://sixapart.com/atom/typepad#">beautiful</weather>
+        ...
 
 The AtomPub plugin supports Entry Custom Fields on Entry Resources, but does not provide Asset Custom Fields on Media Link Entries.
