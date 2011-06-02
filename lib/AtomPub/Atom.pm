@@ -179,6 +179,6 @@ AtomPub::Atom
 
 =head1 AUTHOR & COPYRIGHT
 
-Please see L<MT/AUTHOR & COPYRIGHT>.
+Please see AtomPub's C<LICENSE> file.
 
 =cut

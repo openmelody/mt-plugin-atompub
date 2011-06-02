@@ -195,54 +195,41 @@ An Atom Publishing API interface for communicating with Movable Type.
 
 =head1 METHODS
 
-=head2 $app->xml_body()
+=head2 $app->init()
 
-Takes the content posted to the server and parses it into an XML document.
-Uses either XML::LibXML or XML::XPath depending on which is available.
+Initializes the application.
+
+=head2 $app->handle()
+
+Processes the remote user's request before invoking C<handle_request()> to
+perform the requested action.
+
+=head2 $app->handle_request()
+
+Performs the requested method on the requested resource.
+
+Override this method in your subclass to perform the remote user's request
+(either in the method itself or by dispatching to another method).
 
 =head2 $app->iso2epoch($iso_ts)
 
 Converts C<$iso_ts> in the format of an ISO timestamp into a unix timestamp
 (seconds since the epoch).
 
-=head2 $app->init
-
-Initializes the application.
-
-=head2 $app->get_auth_info
-
-Processes the request for WSSE authentication and returns a hash containing:
-
-=over 4
-
-=item * Username
-
-=item * PasswordDigest
-
-=item * Nonce
-
-=item * Created
-
-=back
-
-=head2 $app->handle_request
-
-The implementation of this in I<AtomPub::Server::Weblog> passes the request
-to the proper method.
-
-=head2 $app->handle
-
-Wrapper method that determines the proper AtomPub::Server package to pass the
-request to.
-
 =head2 $app->iso2ts($iso_ts, $target_zone)
 
 Converts C<$iso_ts> in the format of an ISO timestamp into a MT-compatible
 timestamp (YYYYMMDDHHMMSS) for the specified timezone C<$target_zone>.
 
-=head2 $app->atom_body
+=head2 $app->atom_body()
 
-Processes the request as Atom content and returns an XML::Atom object.
+Processes the request as Atom content and returns a corresponding C<XML::Atom>
+object.
+
+=head2 $app->xml_body()
+
+Takes the content posted to the server and parses it into an XML document.
+Uses either XML::LibXML or XML::XPath depending on which is available.
 
 =head2 $app->error($code, $message)
 
@@ -250,17 +237,17 @@ Sends the HTTP headers necessary to relay an error.
 
 =head2 $app->authenticate()
 
-Checks the WSSE authentication with the local MT user database and
-confirms the user is authorized to access the resources required by
-the request.
+Authenticates the remote user using the credentials provided in the HTTP
+request, and verifies that the authenticated author is authorized to the
+requested resource. Use the C<AtomAppAuthentication> directive to select the
+authenticator to use (default: C<AtomPub::Authen::Basic> for HTTP Basic auth).
+
+Subclass implementations should override this method to authorize the
+authenticated user per the subclass's authorization rules.
 
 =head2 $app->show_error($message)
 
 Returns an XML wrapper for the error response.
-
-=head2 $app->auth_failure($code, $message)
-
-Handles the response in the event of an authentication failure.
 
 =head1 CALLBACKS
 
