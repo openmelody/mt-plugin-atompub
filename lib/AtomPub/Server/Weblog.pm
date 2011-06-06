@@ -290,6 +290,12 @@ sub get_weblogs {
         my $cats = XML::XPath::Node::Element->new('categories');
         $cats->appendAttribute(XML::XPath::Node::Attribute->new('href', $uri . '/svc=categories'));
         $entries->appendChild($cats);
+
+        for my $media_type (qw( application/atom+xml;type=entry image/png image/jpeg image/gif )) {
+            my $accept = XML::XPath::Node::Element->new('accept');
+            $accept->appendChild(XML::XPath::Node::Text->new($media_type));
+            $entries->appendChild($accept);
+        }
     }
     $app->response_code(200);
     $app->response_content_type('application/atomsvc+xml');
