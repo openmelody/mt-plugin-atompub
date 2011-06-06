@@ -291,10 +291,19 @@ sub get_weblogs {
         $cats->appendAttribute(XML::XPath::Node::Attribute->new('href', $uri . '/svc=categories'));
         $entries->appendChild($cats);
 
-        for my $media_type (qw( application/atom+xml;type=entry image/png image/jpeg image/gif )) {
+        my $media = XML::XPath::Node::Element->new('collection');
+        $media->appendAttribute(XML::XPath::Node::Attribute->new('href', $uri));
+        $workspace->appendChild($media);
+
+        my $m_title = XML::XPath::Node::Element->new('atom:title', 'atom');
+        $feed_title = encode_text(MT->translate('[_1]: Media', $blog->name), $enc, 'utf-8');
+        $m_title->appendChild(XML::XPath::Node::Text->new($feed_title));
+        $media->appendChild($m_title);
+
+        for my $media_type (qw( image/png image/jpeg image/gif */* )) {
             my $accept = XML::XPath::Node::Element->new('accept');
             $accept->appendChild(XML::XPath::Node::Text->new($media_type));
-            $entries->appendChild($accept);
+            $media->appendChild($accept);
         }
     }
     $app->response_code(200);
