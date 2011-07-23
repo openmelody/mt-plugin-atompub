@@ -30,7 +30,7 @@ tags:
         EntryAtomID: $AtomPub::AtomPub::Tags::hdlr_entry_atom_id
 
 object_types:
-    entry: 
+    entry:
         atom_id: 'string(255)'
 
 applications:
